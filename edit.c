@@ -746,11 +746,11 @@ int main(int argc, char *argv[])
 						of_list = fopen(tmp, "w+");	
 */
                                     		//printf(" Data Read : 0x%08X  \n",data);
-/*
+
 						Id=(int) ((data>>24)&7);
 						printf("Id: %d\n", Id);
-						if (Id==0){
-*/	
+						if (Id==0){  ////Id is 000 for digitized data
+	
 							ith = 	(int)((data>>17)&0x3F);  //16 channels
 							printf("ith: %d\n", ith);
 							int ithADCInput = -1;
@@ -781,8 +781,8 @@ int main(int argc, char *argv[])
 							//printf( "%d \t %d \t 0x%08X \t %d\n",i,ithADCInput,data, Poschannel);//digitized data
 
 
-						//}
-						//else if (Id==3) 
+						}
+						else if (Id==3)   ////Id is 11 for End Of Event 
 							//printf("%d Event Number=%d\n",i,(data&0x3FFFFFFF));     //End Of Event 
 		
 						break ;
