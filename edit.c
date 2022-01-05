@@ -724,6 +724,7 @@ int main(int argc, char *argv[])
 		ushort ncyc=0 ;		// Number of cycles
 		ushort autoinc ;	// Auto increment address
 		uint32_t		i, data, old_data=0;
+		int Id, ith;
 		CVErrorCodes    ret, old_ret=cvSuccess;
 		//uint16_t NEvts, EvtNo;
 		for (i=0; ncyc==0; i ++)
