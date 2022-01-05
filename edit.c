@@ -750,7 +750,7 @@ int main(int argc, char *argv[])
                                     		//printf(" Data Read : 0x%08X  \n",data);
 						Id=(int) ((data>>30)&3);
 						if (Id==0){	
-							ith = 	(int)(data>>17)&0x3F);  //16 channels
+							ith = 	(int)((data>>17)&0x3F);  //16 channels
 							int ithADCInput = -1;
                
                 					switch (ith)
@@ -803,7 +803,7 @@ int main(int argc, char *argv[])
 				fclose(of_list);
     			}
     
-		}
+		
 		ElapsedTime = CurrentTime - PrevPlotTime;
 		//if (ElapsedTime > 1000) {
 			rate = (float)nev / ElapsedTime;
