@@ -676,7 +676,9 @@ int main(int argc, char *argv[])
 			if(c == 's') {
 				SaveHistograms(histo, brd_nch);
 				printf("Saved histograms to output files\n");
-				fclose(gnuplot);
+				printf("Press any key to quit DAQ\n");
+				getch();
+				quit =1;
 				
 			}
 			PrevKbTime = CurrentTime;
