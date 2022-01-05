@@ -34,6 +34,7 @@ Supported Discriminator Models: V812, V814, V895
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include<stdbool.h>
 
 #ifdef WIN32
 	#include <sys/timeb.h>
@@ -705,21 +706,39 @@ int main(int argc, char *argv[])
 		uint32_t		i, data, old_data=0;
 		int Id, ith;
 		CVErrorCodes    ret, old_ret=cvSuccess;
+		CVDataWidth dtsize = cvD32;
 		//uint16_t NEvts, EvtNo;
+
+
+		bool DataReady;
+		DataReady=false;
+       		for (i=0;i<1000;++i)
+             	{
+            		 //CheckDataReady(BHandle,&DataReady);
+             		CAENVME_ReadCycle(handle,BaseAddress+0x110E,&data,cvA32_U_DATA,cvD32);
+             		if (data&1) {DataReady=true; break;}
+	     		//Come out of the loop when there is at least one event in the Output Buffer.
+             	}
+		if (DataReady==false) 
+		{
+			printf("No event in the Output Buffer\n");
+			break;
+		}
 		if (ncyc==0)
 		{
-
-			ret = CAENVME_ReadCycle(handle,BaseAddress,&data,cvA32_U_DATA,cvD32);
-				
+			ret = CAENVME_ReadCycle(handle,BaseAddress,&data,cvA32_U_DATA,dtsize);	
 			CurrentTime = get_time(); //milisecond
 			//if((i==0) || (ret != old_ret))
 			{
-
 				switch (ret)
 				{
-					case cvSuccess:
+					case cvSuccess: //printf(" Cycle(s) completed normally\n");
 					if((i==0) || (old_data != data))  
-                                   	{      
+                                   	{ 
+							int Poschannel = data & 0x1FFF;
+							histo[ith][Poschannel]++;
+							ns[ith]++;
+							//printf("Data Read : 0x%04X \t %d \n",data, Poschannel);
 /*
              					FILE*of_list; 
 						char tmp[255];
@@ -727,9 +746,13 @@ int main(int argc, char *argv[])
 						of_list = fopen(tmp, "w+");	
 */
                                     		//printf(" Data Read : 0x%08X  \n",data);
-						Id=(int) ((data>>30)&3);
-						if (Id==0){	
+/*
+						Id=(int) ((data>>24)&7);
+						printf("Id: %d\n", Id);
+						if (Id==0){
+*/	
 							ith = 	(int)((data>>17)&0x3F);  //16 channels
+							printf("ith: %d\n", ith);
 							int ithADCInput = -1;
                
                 					switch (ith)
@@ -753,22 +776,24 @@ int main(int argc, char *argv[])
 								default:
 								    	break;
 								}
-							int Poschannel = data & 0xFFF;
-							histo[ith][Poschannel]++;
-							ns[ith]++;
+							
 
-							//printf( "%d \t %d \t 0x%08X \t %d \t %d\n",i,ithADCInput,data, Poschannel,  CurrentTime-PrevPlotTime);//digitized data
-						}
-						else if (Id==3) 
+							//printf( "%d \t %d \t 0x%08X \t %d\n",i,ithADCInput,data, Poschannel);//digitized data
+
+
+						//}
+						//else if (Id==3) 
 							//printf("%d Event Number=%d\n",i,(data&0x3FFFFFFF));     //End Of Event 
 		
 						break ;
+
 					}
-					case cvBusError:printf("Bus Error!\n");
+
+					case cvBusError://printf("Bus Error!\n");
 						break;
-					case cvCommError:printf("Communication Error!"); 
+					case cvCommError://printf("Communication Error!\n"); 
 						break;
-					default:printf("Unknown Error!"); 
+					default://printf("Unknown Error!\n"); 
 						break;
 				}
 			}
@@ -776,9 +801,11 @@ int main(int argc, char *argv[])
 				old_data = data;
 				old_ret = ret;
 
-				BaseAddress += cvD32;                       // Increment address (+1 or +2 or +4) 
+				BaseAddress += dtsize;                       // Increment address (+1 or +2 or +4) 
+//printf("Base Address = 0x%08X\n", BaseAddress);
 				
 			//close(of_list);
+
     		}
     
 		
@@ -814,7 +841,7 @@ int main(int argc, char *argv[])
 			fprintf(gnuplot, "set xlabel 'ADC channels'\n");
 			fprintf(gnuplot, "set yrange [0:]\n");
 			fprintf(gnuplot, "set grid\n");
-			fprintf(gnuplot, "set title 'Det. %d (Rate = %.3fKHz, counts = %d)'\n", ch/2, rate, ns[ch]);
+			fprintf(gnuplot, "set title 'Det. %d (Rate = %.3fKHz, counts = %d)'\n", ch/4, rate, ns[ch]);
 			fprintf(gnuplot, "plot './histo.txt' with step\n");
 			fflush(gnuplot);
 			printf("[q] quit  [r] reset statistics  [s] save histograms [c] change plotting channel\n");
