@@ -749,7 +749,7 @@ int main(int argc, char *argv[])
 
 						Id=(int) ((data>>24)&7);
 						printf("Id: %d\n", Id);
-						if (Id==0){  ////Id is 000 for digitized data
+						if (Id==0){ //digitized data
 	
 							ith = 	(int)((data>>17)&0x3F);  //16 channels
 							printf("ith: %d\n", ith);
@@ -778,12 +778,15 @@ int main(int argc, char *argv[])
 								}
 							
 
-							//printf( "%d \t %d \t 0x%08X \t %d\n",i,ithADCInput,data, Poschannel);//digitized data
+							printf( "%d \t %d \t 0x%08X \t %d\n",i,ithADCInput,data, Poschannel);
 
 
 						}
-						else if (Id==3)   ////Id is 11 for End Of Event 
-							//printf("%d Event Number=%d\n",i,(data&0x3FFFFFFF));     //End Of Event 
+						else if (Id==1) 
+							printf("Valid Channels=%d\n",(data&0xFFF));                   //Header
+						else if (Id==3) 
+							printf("%d Event Number=%d\n",i,(data&0x3FFFFFFF));     //End Of Event 
+						else printf("Invalid readout\n");                                //Invalid Id 
 		
 						break ;
 
