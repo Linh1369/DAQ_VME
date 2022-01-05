@@ -34,7 +34,6 @@ Supported Discriminator Models: V812, V814, V895
 #include <string.h>
 #include <math.h>
 #include <time.h>
-#include <gtk/gtk.h>
 
 #ifdef WIN32
 	#include <sys/timeb.h>
@@ -165,43 +164,51 @@ int ConfigureDiscr(uint16_t OutputWidth, uint16_t Threshold[16], uint16_t Enable
 // ************************************************************************
 // Save Histograms to files
 // ************************************************************************
-
 int SaveHistograms(uint32_t histo[32][4096], int numch)
 {
 	int i, j;
 	for(j=0; j<numch; j++) {
+       		int ithADCInput=-1;
+                switch (j)
+                {
+                case 0:
+                    ithADCInput = 0;
+                    break;
+                case 2:
+                    ithADCInput = 1;
+                    break;
+                case 4:
+                    ithADCInput = 2;
+                    break;
+                case 6:
+                    ithADCInput = 3;
+                    break;
+                case 8:
+                    ithADCInput = 4;
+                    break;
+                case 10:
+                    ithADCInput = 5;
+                    break;
+                case 12:
+                    ithADCInput = 6;
+                    break;
+                case 14:
+                    ithADCInput = 7;
+                    break;
+                default:
+                    break;
+                }
 		FILE *fout;
 		char fname[100];
-		sprintf(fname, "./Histo_%d.txt",  j);
-		fout = fopen(fname, "w");
-		int ithADCInput=-1;
-		switch(j)
-		{
-		case 0: ithADCInput = 0;
-			break;
-		case 2: ithADCInput = 1;
-			break;
-		case 4: ithADCInput = 2;
-			break;
-		case 6: ithADCInput = 3;
-			break;
-		case 8: ithADCInput = 4;
-			break;
-		case 10:ithADCInput = 5;
-			break;
-		case 12:ithADCInput = 6;
-			break;
-		case 14:ithADCInput = 7;
-			break;
-		default:
-			break;						
-		} 
+		sprintf(fname, "./Histo_det_%d.txt", ithADCInput);
+		fout = fopen(fname, "w"); 
 		for(i=0; i<4096; i++) 
-		{
-			if ((j-2*ithADCInput)==0)	
-		
-				fprintf(fout, "%d\n", (int)histo[j][i]);
-		}
+			{
+				if((j-2*ithADCInput)==0)
+
+					fprintf(fout, "%d \t %d\n", i, (int)histo[j][i] );
+			}
+
 		fclose(fout);
 	}
 	return 0;
@@ -352,13 +359,12 @@ static void findModelVersion(uint16_t model, uint16_t vers, char *modelVersion, 
 		}
 		break;
 	case 1785:
-		switch (vers){
-		case 0X3E:
-			strcpy(modelVersion, "");
+		switch (vers) {
+		case 0xE3:
+			strcpy(modelVersion, " ");
 			*ch = 16;
 			return;
-
-			}
+		}
 		break;
 	}
 }
@@ -369,7 +375,7 @@ static void findModelVersion(uint16_t model, uint16_t vers, char *modelVersion, 
 /******************************************************************************/
 int main(int argc, char *argv[])
 {
-	int i, j, ch=0, chindex, wcnt, nch, pnt, ns[32], bcnt, brd_nch = 32;
+	int i, j, ch=0, chindex, wcnt, nch, pnt, ns[32], bcnt, brd_nch = 32, cnt=0;
 	int quit=0, totnb=0, nev=0, DataError=0, LogMeas=0, lognum=0;
 	int link=0, bdnum=0;
 	int DataType = DATATYPE_HEADER;
@@ -390,11 +396,11 @@ int main(int argc, char *argv[])
 	uint16_t Iped = 255;			// pedestal of the QDC (or resolution of the TDC)
 	uint32_t histo[32][4096];		// histograms (charge, peak or TAC)
 	uint32_t buffer[MAX_BLT_SIZE/4];// readout buffer (raw data from the board)
-	uint32_t data;
 	uint16_t ADCdata[32];			// ADC data (charge, peak or TAC)
-	long CurrentTime, PrevPlotTime, PrevKbTime, ElapsedTime;	// time of the PC
+	uint16_t fSpecChannelPos;
+	long CurrentTime, PrevPlotTime, PrevKbTime, ElapsedTime, fCurrentTime, tm;	// time of the PC
 	float rate = 0.0;				// trigger rate
-	FILE *of_list=NULL;				// list data file
+	FILE *of_list;				// list data file
 	FILE *of_raw=NULL;				// raw data file
 	FILE *f_ini;					// config file
 	FILE *gnuplot=NULL;				// gnuplot (will be opened in a pipe)
@@ -522,12 +528,14 @@ int main(int argc, char *argv[])
 		sprintf(tmp, "./List.txt");
 		if ((of_list=fopen(tmp, "w")) == NULL) 
 			printf("Can't open list file for writing\n");
+
 	}
 	if (EnableRawDataFile) {
 		char tmp[255];
 		sprintf(tmp, "./RawData.txt");
 		if ((of_raw=fopen(tmp, "wb")) == NULL)
 			printf("Can't open raw data file for writing\n");
+
 	}
 
 	// Program the discriminator (if the base address is set in the config file)
@@ -555,8 +563,10 @@ int main(int argc, char *argv[])
 	if (ENABLE_LOG) {
 		char tmp[255];
 		sprintf(tmp, "./qtp_log.txt");
+		
 		printf("Log file is enabled\n");
 		logfile = fopen(tmp,"w");
+		
 	}
 
 	// Open gnuplot (as a pipe)
@@ -636,7 +646,7 @@ int main(int argc, char *argv[])
 	printf("QTP board programmed\n");
 	printf("Press any key to start\n");
 	getch();
-	printf("Acquisition Started ...");
+	printf("Acquisition Started...");
 
 
 	// ------------------------------------------------------------------------------------
@@ -653,6 +663,7 @@ int main(int argc, char *argv[])
 	write_reg(0x1034, 0x4);
 
 	PrevPlotTime = get_time();
+	long TimestatDAQ=get_time();
 	PrevKbTime = PrevPlotTime;
 	while(!quit)  {
 
@@ -679,47 +690,13 @@ int main(int argc, char *argv[])
 				printf("Press any key to quit DAQ\n");
 				getch();
 				quit =1;
-				
 			}
 			PrevKbTime = CurrentTime;
 		}
 
 		// Log statistics on the screen and plot histograms
-		
-		//}
-/*
-		// if needed, read a new block of data from the board 
-		if ((pnt == wcnt) || ((buffer[pnt] & DATATYPE_MASK) == DATATYPE_FILLER)) {
-			CAENVME_FIFOMBLTReadCycle(handle, BaseAddress, (char *)buffer, MAX_BLT_SIZE, cvA32_U_MBLT, &bcnt);
-			if (ENABLE_LOG && (bcnt>0)) {
-				int b;
-				fprintf(logfile, "Read Data Block: size = %d bytes\n", bcnt);
-				for(b=0; b<(bcnt/4); b++)
-					fprintf(logfile, "%2d: %08X\n", b, buffer[b]);
-			}
-			wcnt = bcnt/4;
-			totnb += bcnt;
-			pnt = 0;
-		}
-		if (wcnt == 0)  // no data available
-			continue;
-
-		// save raw data (board memory dump)
-		if (of_raw != NULL)
-			fwrite(buffer, sizeof(char), bcnt, of_raw);
-
-		}
-		pnt++;
-
-		if (DataError) {
-			pnt = wcnt;
-			write_reg(0x1032, 0x4);
-			write_reg(0x1034, 0x4);
-			DataType = DATATYPE_HEADER;
-			DataError=0;
-		}
-*/
-
+		ElapsedTime = CurrentTime - PrevPlotTime;
+		long timeDAQ= get_time() - TimestatDAQ;
 		//read single cycle 
 
 
@@ -729,7 +706,7 @@ int main(int argc, char *argv[])
 		int Id, ith;
 		CVErrorCodes    ret, old_ret=cvSuccess;
 		//uint16_t NEvts, EvtNo;
-		for (i=0; ncyc==0; i ++)
+		if (ncyc==0)
 		{
 
 			ret = CAENVME_ReadCycle(handle,BaseAddress,&data,cvA32_U_DATA,cvD32);
@@ -743,10 +720,12 @@ int main(int argc, char *argv[])
 					case cvSuccess:
 					if((i==0) || (old_data != data))  
                                    	{      
+/*
              					FILE*of_list; 
 						char tmp[255];
 						sprintf(tmp, "./List.txt");
 						of_list = fopen(tmp, "w+");	
+*/
                                     		//printf(" Data Read : 0x%08X  \n",data);
 						Id=(int) ((data>>30)&3);
 						if (Id==0){	
@@ -778,37 +757,40 @@ int main(int argc, char *argv[])
 							histo[ith][Poschannel]++;
 							ns[ith]++;
 
-							fprintf(of_list, "%d \t %d \t 0x%08X \t %d \t %d\n",i,ithADCInput,data, Poschannel,  CurrentTime-PrevPlotTime);//digitized data
+							//printf( "%d \t %d \t 0x%08X \t %d \t %d\n",i,ithADCInput,data, Poschannel,  CurrentTime-PrevPlotTime);//digitized data
 						}
 						else if (Id==3) 
-							fprintf(of_list,"%d Event Number=%d\n",i,(data&0x3FFFFFFF));     //End Of Event 
-							
-
-                                    		}
+							//printf("%d Event Number=%d\n",i,(data&0x3FFFFFFF));     //End Of Event 
+		
 						break ;
-					case cvBusError: printf("Bus Error!\n");
+					}
+					case cvBusError:printf("Bus Error!\n");
 						break;
 					case cvCommError:printf("Communication Error!"); 
 						break;
-					default: printf("Unknown Error!"); 
+					default:printf("Unknown Error!"); 
 						break;
 				}
-				}
+			}
 
 				old_data = data;
 				old_ret = ret;
 
 				BaseAddress += cvD32;                       // Increment address (+1 or +2 or +4) 
 				
-				fclose(of_list);
-    			}
+			//close(of_list);
+    		}
     
 		
-		ElapsedTime = CurrentTime - PrevPlotTime;
-		//if (ElapsedTime > 1000) {
+
+		
+
+
+		if (ElapsedTime > 1000) {
 			rate = (float)nev / ElapsedTime;
 			ClearScreen();
 			printf("Acquired %d events on det %d\n", ns[ch], ch/2);
+			printf("Time of DAQ (min) %0.2f\n", timeDAQ/(1000.*60.));
 			if (nev > 1000)
 				printf("Trigger Rate = %.2f KHz\n", (float)nev / ElapsedTime);
 			else
@@ -817,13 +799,15 @@ int main(int argc, char *argv[])
 				printf("Readout Rate = %.2f MB/s\n", ((float)totnb / (1024*1024)) / ((float)ElapsedTime / 1000));
 			else
 				printf("Readout Rate = %.2f KB/s\n", ((float)totnb / 1024) / ((float)ElapsedTime / 1000));
+
 			nev = 0;
 			totnb = 0;
+		
 			printf("\n\n");
 			sprintf(histoFileName, "./histo.txt");
 			fh = fopen(histoFileName,"w");
 			for(i=0; i<4096; i++) {
-				fprintf(fh, "%d\n", (int)histo[ch][i]);
+				fprintf(fh, "%d \t %d\n", i, (int)histo[ch][i]);
 			}
 			fclose(fh);
 			fprintf(gnuplot, "set ylabel 'Counts'\n");			
@@ -831,22 +815,22 @@ int main(int argc, char *argv[])
 			fprintf(gnuplot, "set yrange [0:]\n");
 			fprintf(gnuplot, "set grid\n");
 			fprintf(gnuplot, "set title 'Det. %d (Rate = %.3fKHz, counts = %d)'\n", ch/2, rate, ns[ch]);
-			fprintf(gnuplot, "plot 'histo.txt' with step\n");
+			fprintf(gnuplot, "plot './histo.txt' with step\n");
 			fflush(gnuplot);
 			printf("[q] quit  [r] reset statistics  [s] save histograms [c] change plotting channel\n");
 			PrevPlotTime = CurrentTime;
-
 			if (EnableHistoFiles) SaveHistograms(histo, brd_nch);
+		}
 
-
-
-	
+	//fclose(of_list);	
+	}
+//fclose(of_list);
 	if (EnableHistoFiles) {
 		SaveHistograms(histo, brd_nch);	
 		printf("Saved histograms to output files\n");
 	}
 
-
+//fclose(of_list);
 // ------------------------------------------------------------------------------------
 
 QuitProgram:
