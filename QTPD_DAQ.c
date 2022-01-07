@@ -128,6 +128,209 @@ void write_reg(uint16_t reg_addr, uint16_t data)
 }
 
 
+/*******************************************************************************/
+/*                                USING BLOCK TRANSFER                                    */
+/*******************************************************************************/
+void VMEReadBLT(BaseAddress,gpointer Value)
+	int i, j, ch=0, chindex, wcnt, nch, pnt, ns[32], bcnt, brd_nch = 32;
+	int quit=0, totnb=0, nev=0, DataError=0, LogMeas=0, lognum=0;
+	int link=0, bdnum=0;
+	int DataType = DATATYPE_HEADER;
+	unsigned int fADCInputNo;
+	uint32_t histo[32][4096];		// histograms (charge, peak or TAC)
+	uint32_t buffer[MAX_BLT_SIZE/4];	// readout buffer (raw data from the board)
+	uint16_t ADCdata[32];			// ADC data (charge, peak or TAC)
+	
+
+
+	// if needed, read a new block of data from the board 
+		if ((pnt == wcnt) || ((buffer[pnt] & DATATYPE_MASK) == DATATYPE_FILLER)) {
+			CAENVME_FIFOMBLTReadCycle(handle, BaseAddress, (char *)buffer, MAX_BLT_SIZE, cvA32_U_MBLT, &bcnt);
+			if (ENABLE_LOG && (bcnt>0)) {
+				int b;
+				fprintf(logfile, "Read Data Block: size = %d bytes\n", bcnt);
+				for(b=0; b<(bcnt/4); b++)
+					fprintf(logfile, "%2d: %08X\n", b, buffer[b]);
+			}
+			wcnt = bcnt/4;
+			totnb += bcnt;
+			pnt = 0;
+		}
+		if (wcnt == 0)  // no data available
+			continue;
+
+		// save raw data (board memory dump)
+		if (of_raw != NULL)
+			fwrite(buffer, sizeof(char), bcnt, of_raw);
+
+		/* header */
+		switch (DataType) {
+		case DATATYPE_HEADER :
+			if((buffer[pnt] & DATATYPE_MASK) != DATATYPE_HEADER) {
+				//printf("Header not found: %08X (pnt=%d)\n", buffer[pnt], pnt);
+				DataError = 1;
+			} 
+			else {
+				nch = (buffer[pnt] >> 8) & 0x3F;
+				chindex = 0;
+				nev++;
+				memset(ADCdata, 0xFFFF, 32*sizeof(uint16_t));
+				if (nch>0)
+					DataType = DATATYPE_CHDATA;
+				else
+					DataType = DATATYPE_EOB;		
+			}
+			break;
+
+		/* Channel data */
+		case DATATYPE_CHDATA :
+			if((buffer[pnt] & DATATYPE_MASK) != DATATYPE_CHDATA) {
+				//printf("Wrong Channel Data: %08X (pnt=%d)\n", buffer[pnt], pnt);
+				DataError = 1;
+			} else {
+				if (brd_nch == 32)
+					j = (int)((buffer[pnt] >> 16) & 0x3F);  // for V792 (32 channels)
+				else
+					j = (int)((buffer[pnt] >> 17) & 0x3F);  // for V792N (16 channels)
+				histo[j][buffer[pnt] & 0xFFF]++;
+				ADCdata[j] = buffer[pnt] & 0xFFF;
+				ns[j]++;
+				if (chindex == (nch-1))
+					DataType = DATATYPE_EOB;
+				chindex++;
+			}
+			break;
+
+/* EOB */
+		case DATATYPE_EOB :
+			if((buffer[pnt] & DATATYPE_MASK) != DATATYPE_EOB) {
+				//printf("EOB not found: %08X (pnt=%d)\n", buffer[pnt], pnt);
+				DataError = 1;
+			} else {
+				DataType = DATATYPE_HEADER;
+				if (of_list != NULL) {
+					fprintf(of_list, "Event Num. %d\n", buffer[pnt] & 0xFFFFFF);
+					for(i=0; i<32; i++) {
+						if (ADCdata[i] != 0xFFFF)
+							fprintf(of_list, "Ch %2d: %d\n", i, ADCdata[i]);
+					}
+				}
+			}
+			break;
+		}
+		pnt++;
+
+		if (DataError) {
+			pnt = wcnt;
+			write_reg(0x1032, 0x4);
+			write_reg(0x1034, 0x4);
+			DataType = DATATYPE_HEADER;
+			DataError=0;
+		}
+
+	}
+
+
+/*******************************************************************************/
+/*                                USING SINGLE CYCLE                                   */
+/*******************************************************************************/
+void VMEReadCycle(uint16_t addr)
+{
+	uint32_t Data, Old_Data=0;
+	CVErrorCodes    Ret, Old_Ret= cvSuccess; 
+	int i,Id, ith, ithADCInput;
+	bool DataReady;
+	ushort ncyc =0;
+
+	//Read operation starts
+
+   	DataReady=false;
+       	for (i=0;i<1000;++i)
+        {
+             //CheckDataReady
+             CAENVME_ReadCycle(handle,BaseAddr+0x110E,&Data,cvA32_U_DATA,cvD16);
+             if (Data&1) {DataReady=true; break;}
+	     //Come out of the loop when there is at least one event in the Output Buffer.
+        }
+	if (DataReady==false) {
+		printf("No event in the Output Buffer\n");
+		break;
+	}
+	for (i=0;i<32;++i)
+	{
+		Ret=CAENVME_ReadCycle(handle,addr,&Data,cvA32_U_DATA,cvD16);
+		printf("Address=%X Data=%u Am=%d DWidth=%d Ret=%d \n", addr, Data&0x1FFF, cvA32_U_DATA, cvD16, Ret);
+		switch (Ret)
+		{
+			case cvSuccess:
+				if ((i==0) || (Old_Data != Data))
+				{
+					printf(Str,"Data Read : 0x%08X, ADC Value=%d\n",Data,Data&0x1FFF);
+					Id=(Data>>24)&7;
+					/*Id is 010 for Header*/
+					if (Id==2) 										
+						fprintf("i=%d Header found. Valid Channels=%d\n",i,(Data>>8)&0x4F);  
+
+      					/*Id is 000 for digitized data*/
+					else if (Id==0)  
+					{
+						ith = 	(int)((data>>17)&0x3F);  //16 channels
+						printf("ith: %d\n", ith);
+						int ithADCInput = -1;
+               
+                				switch (ith)
+                				{
+		        				case 0: ithADCInput = 0;
+		            					break;
+							case 2: ithADCInput = 1;
+		           					break;
+							case 4: ithADCInput = 2;
+		           					break;
+							case 6: ithADCInput = 3;
+								break;
+							case 8: ithADCInput = 4;
+								break;
+							case 10:ithADCInput = 5;
+								break;
+							case 12:ithADCInput = 6;
+								break;
+							case 14:ithADCInput = 7;
+								break;
+							default:
+								break;
+						}
+						printf("i=%d A=%d Data=%d\n",i,(Data>>16)&0x1F,Data&0x1FFF);         
+					}
+
+
+
+					else if (Id==4) printf("i=%d Event Number=%d\n",i,Data&0xFFFFFF);                //Id is 100 for Event Counter
+					else printf("Invalid readout\n");                                                             //Invalid Id 
+				}
+	/*
+				if (VMEParameter.DataWidth == cvD16)
+					{
+					printf("Data Read : 0x%04X \n",Data&0xffff);
+				
+					} 
+				if (VMEParameter.DataWidth == cvD8)
+					{
+					printf("Data Read : 0x%02X \n",Data&0xff);
+					}
+	*/
+					break;
+				case cvBusError  : break;
+				case cvCommError : break;
+				default          : break;
+			}
+		if (!(Id==2 || Id==0)) break; //Break out of inner loop in case the word is neither a header nor valid data
+		Old_data = Data;
+		Old_Ret = Ret;
+		addr += cvD16;
+	}
+CAENVME_End(handle);
+}
+
 
 // ************************************************************************
 // Discriminitor settings
@@ -168,47 +371,12 @@ int SaveHistograms(uint32_t histo[32][4096], int numch)
 {
 	int i, j;
 	for(j=0; j<numch; j++) {
-       		int ithADCInput=-1;
-                switch (j)
-                {
-                case 0:
-                    ithADCInput = 0;
-                    break;
-                case 2:
-                    ithADCInput = 1;
-                    break;
-                case 4:
-                    ithADCInput = 2;
-                    break;
-                case 6:
-                    ithADCInput = 3;
-                    break;
-                case 8:
-                    ithADCInput = 4;
-                    break;
-                case 10:
-                    ithADCInput = 5;
-                    break;
-                case 12:
-                    ithADCInput = 6;
-                    break;
-                case 14:
-                    ithADCInput = 7;
-                    break;
-                default:
-                    break;
-                }
 		FILE *fout;
 		char fname[100];
-		sprintf(fname, "./Histo_det_%d.txt", ithADCInput);
+		sprintf(fname, "%s\\Histo_%d.txt",path,  j);
 		fout = fopen(fname, "w"); 
 		for(i=0; i<4096; i++) 
-			{
-				if((j-2*ithADCInput)==0)
-
-					fprintf(fout, "%d\n", (int)histo[j][i] );
-			}
-
+			fprintf(fout, "%d\n", (int)histo[j][i]);
 		fclose(fout);
 	}
 	return 0;
@@ -354,14 +522,6 @@ static void findModelVersion(uint16_t model, uint16_t vers, char *modelVersion, 
 		default:
 			strcpy(modelVersion, "-");
 			*ch = 32;
-			return;
-		}
-		break;
-	case 1785:
-		switch (vers) {
-		case 0xE3:
-			strcpy(modelVersion, " ");
-			*ch = 16;
 			return;
 		}
 		break;
@@ -523,13 +683,13 @@ int main(int argc, char *argv[])
 	// Open output files
 	if (EnableListFile) {
 		char tmp[255];
-		sprintf(tmp, "./List.txt");
+		sprintf(tmp, "%s\\List.txt", path);
 		if ((of_list=fopen(tmp, "w")) == NULL) 
 			printf("Can't open list file for writing\n");
 	}
 	if (EnableRawDataFile) {
 		char tmp[255];
-		sprintf(tmp, "./RawData.txt");
+		sprintf(tmp, "%s\\RawData.txt", path);
 		if ((of_raw=fopen(tmp, "wb")) == NULL)
 			printf("Can't open raw data file for writing\n");
 	}
@@ -558,7 +718,7 @@ int main(int argc, char *argv[])
 	// Open log file (for debugging)
 	if (ENABLE_LOG) {
 		char tmp[255];
-		sprintf(tmp, "./qtp_log.txt");
+		sprintf(tmp, "%s\\qtp_log.txt", path);
 		printf("Log file is enabled\n");
 		logfile = fopen(tmp,"w");
 	}
@@ -640,7 +800,7 @@ int main(int argc, char *argv[])
 	printf("QTP board programmed\n");
 	printf("Press any key to start\n");
 	getch();
-	printf("Acquisition Started...");
+	printf("Acquisition Started. Plot is currently set on channel %d\n", ch);
 
 
 	// ------------------------------------------------------------------------------------
@@ -676,22 +836,20 @@ int main(int argc, char *argv[])
 			if(c == 'c') {
 				printf("Enter new channel : ");
 				scanf("%d", &ch);
-
 			}
 			if(c == 's') {
 				SaveHistograms(histo, brd_nch);
 				printf("Saved histograms to output files\n");
-				fclose(gnuplot);
 			}
 			PrevKbTime = CurrentTime;
 		}
 
 		// Log statistics on the screen and plot histograms
 		ElapsedTime = CurrentTime - PrevPlotTime;
-		if (ElapsedTime > 1000) {
+		//if (ElapsedTime > 1000) {
 			rate = (float)nev / ElapsedTime;
 			ClearScreen();
-			printf("Acquired %d events on det %d\n", ns[ch], ch/2);
+			printf("Acquired %d events on channel %d\n", ns[ch], ch);
 			if (nev > 1000)
 				printf("Trigger Rate = %.2f KHz\n", (float)nev / ElapsedTime);
 			else
@@ -703,7 +861,7 @@ int main(int argc, char *argv[])
 			nev = 0;
 			totnb = 0;
 			printf("\n\n");
-			sprintf(histoFileName, "./histo.txt");
+			sprintf(histoFileName, "%s\\histo.txt", path);
 			fh = fopen(histoFileName,"w");
 			for(i=0; i<4096; i++) {
 				fprintf(fh, "%d\n", (int)histo[ch][i]);
@@ -713,13 +871,13 @@ int main(int argc, char *argv[])
 			fprintf(gnuplot, "set xlabel 'ADC channels'\n");
 			fprintf(gnuplot, "set yrange [0:]\n");
 			fprintf(gnuplot, "set grid\n");
-			fprintf(gnuplot, "set title 'Det. %d (Rate = %.3fKHz, counts = %d)'\n", ch/2, rate, ns[ch]);
-			fprintf(gnuplot, "plot './histo.txt' with step\n");
+			fprintf(gnuplot, "set title 'Ch. %d (Rate = %.3fKHz, counts = %d)'\n", ch, rate, ns[ch]);
+			fprintf(gnuplot, "plot '%s\\histo.txt' with step\n",path);
 			fflush(gnuplot);
 			printf("[q] quit  [r] reset statistics  [s] save histograms [c] change plotting channel\n");
 			PrevPlotTime = CurrentTime;
 			if (EnableHistoFiles) SaveHistograms(histo, brd_nch);
-		}
+		//}
 
 		// if needed, read a new block of data from the board 
 		if ((pnt == wcnt) || ((buffer[pnt] & DATATYPE_MASK) == DATATYPE_FILLER)) {
@@ -806,6 +964,7 @@ int main(int argc, char *argv[])
 		}
 
 	}
+
 
 	if (EnableHistoFiles) {
 		SaveHistograms(histo, brd_nch);	
