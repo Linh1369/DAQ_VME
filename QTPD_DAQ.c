@@ -132,6 +132,7 @@ void write_reg(uint16_t reg_addr, uint16_t data)
 /*                                USING BLOCK TRANSFER                                    */
 /*******************************************************************************/
 void VMEReadBLT(BaseAddress,gpointer Value)
+{
 	int i, j, ch=0, chindex, wcnt, nch, pnt, ns[32], bcnt, brd_nch = 32;
 	int quit=0, totnb=0, nev=0, DataError=0, LogMeas=0, lognum=0;
 	int link=0, bdnum=0;
@@ -227,8 +228,10 @@ void VMEReadBLT(BaseAddress,gpointer Value)
 			DataType = DATATYPE_HEADER;
 			DataError=0;
 		}
+CAENVME_End(BHandle);
+}
 
-	}
+
 
 
 /*******************************************************************************/
