@@ -185,37 +185,110 @@ void VMEReadBLT(uint16_t addr,(char*) buffer)
 
 		/* Channel data */
 		case DATATYPE_CHDATA :
-			if((buffer[pnt] & DATATYPE_MASK) != DATATYPE_CHDATA) {
+			if((buffer[pnt] & DATATYPE_MASK) != DATATYPE_CHDATA) 
+			{
 				//printf("Wrong Channel Data: %08X (pnt=%d)\n", buffer[pnt], pnt);
 				DataError = 1;
-			} else {
+			} 
+			else 
+			{
 				if (brd_nch == 32)
 					j = (int)((buffer[pnt] >> 16) & 0x3F);  // for V792 (32 channels)
 				else
 					j = (int)((buffer[pnt] >> 17) & 0x3F);  // for V792N (16 channels)
-				histo[j][buffer[pnt] & 0xFFF]++;
-				ADCdata[j] = buffer[pnt] & 0xFFF;
-				ns[j]++;
-				if (chindex == (nch-1))
+				int ithADCInput=-1;
+                		switch (j)
+                		{
+                			case 0:
+                    				ithADCInput = 0;
+                    				break;
+                			case 2:
+                   				ithADCInput = 1;
+                   				break;
+                			case 4:
+                    				ithADCInput = 2;
+                    				break;
+                			case 6:
+                    				ithADCInput = 3;
+                    				break;
+                			case 8:
+                    				ithADCInput = 4;
+                    				break;
+                			case 10:
+                    				ithADCInput = 5;
+                   				break;
+                			case 12:
+                    				ithADCInput = 6;
+                    				break;
+                			case 14:
+                    				ithADCInput = 7;
+                    				break;
+                			default:
+                    				break;
+                		}
+
+				//for(j; j<16; j++){
+				long tm = fCurrentTime-TimestatDAQ;
+
+				
+
+				if((j-2*ithADCInput)==0){
+					
+					FILE*of_list;
+					char tmp[255];
+					sprintf(tmp, "./List.txt");
+					of_list = fopen(tmp,"w+");
+					//fprintf(of_list, "Time of DAQ (min) %0.2f\n", timeDAQ/(1000.*60.));
+					//fprintf(of_list, "No.Event \t ADCChannel \t Det\n");
+					cnt++;
+					histo[j][buffer[pnt] & 0xFFF]++;
+					ns[j]++;
+					
+					if ((buffer[pnt] & 0xFFF)<4085) {
+						printf("%d \t %d \t %d\n", cnt, buffer[pnt] & 0xFFF, ithADCInput);
+						fprintf(of_list, "%d \t %d\n", cnt, buffer[pnt] & 0xFFF);
+						fclose(of_list);
+								
+
+						
+					}
+					//fclose(of_list);
+
+				}
+
+                  
+				if (chindex == (nch-1)){
+						
 					DataType = DATATYPE_EOB;
+				}
+				
+					
+					
+				//}
+
 				chindex++;
 			}
+			
+			
 			break;
 
-/* EOB */
+		/* EOB */
 		case DATATYPE_EOB :
 			if((buffer[pnt] & DATATYPE_MASK) != DATATYPE_EOB) {
 				//printf("EOB not found: %08X (pnt=%d)\n", buffer[pnt], pnt);
 				DataError = 1;
 			} else {
 				DataType = DATATYPE_HEADER;
+/*
 				if (of_list != NULL) {
 					fprintf(of_list, "Event Num. %d\n", buffer[pnt] & 0xFFFFFF);
 					for(i=0; i<32; i++) {
 						if (ADCdata[i] != 0xFFFF)
 							fprintf(of_list, "Ch %2d: %d\n", i, ADCdata[i]);
 					}
+					//fclose(of_list);
 				}
+*/
 			}
 			break;
 		}
@@ -251,7 +324,7 @@ void VMEReadCycle(uint16_t addr)
        	for (i=0;i<1000;++i)
         {
              //CheckDataReady
-             CAENVME_ReadCycle(handle,BaseAddr+0x110E,&Data,cvA32_U_DATA,cvD16);
+             CAENVME_ReadCycle(handle,BaseAddr+0x110E,&Data,cvA32_U_DATA,cvD32);
              if (Data&1) {DataReady=true; break;}
 	     //Come out of the loop when there is at least one event in the Output Buffer.
         }
@@ -261,24 +334,28 @@ void VMEReadCycle(uint16_t addr)
 	}
 	for (i=0;i<32;++i)
 	{
-		Ret=CAENVME_ReadCycle(handle,addr,&Data,cvA32_U_DATA,cvD16);
-		printf("Address=%X Data=%u Am=%d DWidth=%d Ret=%d \n", addr, Data&0x1FFF, cvA32_U_DATA, cvD16, Ret);
+		Ret=CAENVME_ReadCycle(handle,addr,&Data,cvA32_U_DATA,cvD32);
+		//printf("Address=%X Data=%u Am=%d DWidth=%d Ret=%d \n", addr, Data&0x1FFF, cvA32_U_DATA, cvD32, Ret);
+		FILE*of_list;
+					char tmp[255];
+					sprintf(tmp, "./List.txt");
+					of_list = fopen(tmp,"w+");
 		switch (Ret)
 		{
 			case cvSuccess:
 				if ((i==0) || (Old_Data != Data))
 				{
-					printf(Str,"Data Read : 0x%08X, ADC Value=%d\n",Data,Data&0x1FFF);
+					
+					//fprintf(of_list,"Data Read : 0x%08X, ADC Value=%d\n",Data,Data&0x1FFF);
 					Id=(Data>>24)&7;
-					/*Id is 010 for Header*/
-					if (Id==2) 										
-						fprintf("i=%d Header found. Valid Channels=%d\n",i,(Data>>8)&0x4F);  
+					if (Id==2) 		//Id is 010 for Header								
+						fprintf(of_list, "i=%d Header found. Valid Channels=%d\n",i,(Data>>8)&0x4F);  
 
-      					/*Id is 000 for digitized data*/
-					else if (Id==0)  
+      					
+					else if (Id==0)  	//Id is 000 for digitized data
 					{
 						ith = 	(int)((data>>17)&0x3F);  //16 channels
-						printf("ith: %d\n", ith);
+						//printf("ith: %d\n", ith);
 						int ithADCInput = -1;
                
                 				switch (ith)
@@ -302,13 +379,26 @@ void VMEReadCycle(uint16_t addr)
 							default:
 								break;
 						}
-						printf("i=%d A=%d Data=%d\n",i,(Data>>16)&0x1F,Data&0x1FFF);         
+						if((j-2*ithADCInput)==0)
+						{
+							cnt++;
+							histo[j][(Data>>8)&0x4F]++;
+							ns[j]++;
+					
+							if (((Data>>8)&0x4F)<4085) {
+							//printf("%d \t %d \t %d\n", cnt, buffer[pnt] & 0xFFF, ithADCInput);
+								fprintf(of_list, "%d \t %d\n", cnt, (Data>>8)&0x4F);
+								fclose(of_list);					
+							}
+
+						}
+						//fprintf(of_list, "i=%d A=%d Data=%d\n",i,(Data>>16)&0x1F,Data&0x1FFF);         
 					}
 
 
 
-					else if (Id==4) printf("i=%d Event Number=%d\n",i,Data&0xFFFFFF);                //Id is 100 for Event Counter
-					else printf("Invalid readout\n");                                                             //Invalid Id 
+					else if (Id==4) fprintf(of_list, "i=%d Event Number=%d\n",i,Data&0xFFFFFF);                //Id is 100 for Event Counter
+					else fprintf(of_list, "Invalid readout\n");                                                //Invalid Id 
 				}
 	/*
 				if (VMEParameter.DataWidth == cvD16)
@@ -849,7 +939,7 @@ int main(int argc, char *argv[])
 
 		// Log statistics on the screen and plot histograms
 		ElapsedTime = CurrentTime - PrevPlotTime;
-		//if (ElapsedTime > 1000) {
+		if (ElapsedTime > 1000) {
 			rate = (float)nev / ElapsedTime;
 			ClearScreen();
 			printf("Acquired %d events on channel %d\n", ns[ch], ch);
@@ -880,7 +970,7 @@ int main(int argc, char *argv[])
 			printf("[q] quit  [r] reset statistics  [s] save histograms [c] change plotting channel\n");
 			PrevPlotTime = CurrentTime;
 			if (EnableHistoFiles) SaveHistograms(histo, brd_nch);
-		//}
+		}
 
 		// if needed, read a new block of data from the board 
 		VMEReadBLT(BaseAddress,(char*) buffer);
