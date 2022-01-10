@@ -127,6 +127,10 @@ void write_reg(uint16_t reg_addr, uint16_t data)
 		fprintf(logfile, " Writing register at address %08X; data=%04X; ret=%d\n", (uint32_t)(BaseAddress + reg_addr), data, (int)ret);
 }
 
+FILE*of_list;
+char tmp[255];
+sprintf(tmp, "./List.txt");
+of_list = fopen(tmp,"w+");
 
 /*******************************************************************************/
 /*                                USING BLOCK TRANSFER                                    */
@@ -234,10 +238,6 @@ void VMEReadBLT(uint16_t addr,(char*) buffer)
 
 				if((j-2*ithADCInput)==0){
 					
-					FILE*of_list;
-					char tmp[255];
-					sprintf(tmp, "./List.txt");
-					of_list = fopen(tmp,"w+");
 					//fprintf(of_list, "Time of DAQ (min) %0.2f\n", timeDAQ/(1000.*60.));
 					//fprintf(of_list, "No.Event \t ADCChannel \t Det\n");
 					cnt++;
@@ -246,11 +246,7 @@ void VMEReadBLT(uint16_t addr,(char*) buffer)
 					
 					if ((buffer[pnt] & 0xFFF)<4085) {
 						printf("%d \t %d \t %d\n", cnt, buffer[pnt] & 0xFFF, ithADCInput);
-						fprintf(of_list, "%d \t %d\n", cnt, buffer[pnt] & 0xFFF);
-						fclose(of_list);
-								
-
-						
+						fprintf(of_list, "%d \t %d\n", cnt, buffer[pnt] & 0xFFF);	
 					}
 					//fclose(of_list);
 
@@ -279,16 +275,6 @@ void VMEReadBLT(uint16_t addr,(char*) buffer)
 				DataError = 1;
 			} else {
 				DataType = DATATYPE_HEADER;
-/*
-				if (of_list != NULL) {
-					fprintf(of_list, "Event Num. %d\n", buffer[pnt] & 0xFFFFFF);
-					for(i=0; i<32; i++) {
-						if (ADCdata[i] != 0xFFFF)
-							fprintf(of_list, "Ch %2d: %d\n", i, ADCdata[i]);
-					}
-					//fclose(of_list);
-				}
-*/
 			}
 			break;
 		}
