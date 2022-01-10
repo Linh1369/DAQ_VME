@@ -131,7 +131,7 @@ void write_reg(uint16_t reg_addr, uint16_t data)
 /*******************************************************************************/
 /*                                USING BLOCK TRANSFER                                    */
 /*******************************************************************************/
-void VMEReadBLT(BaseAddress,gpointer Value)
+void VMEReadBLT(uint16_t addr,(char*) buffer)
 {
 	int i, j, ch=0, chindex, wcnt, nch, pnt, ns[32], bcnt, brd_nch = 32;
 	int quit=0, totnb=0, nev=0, DataError=0, LogMeas=0, lognum=0;
@@ -883,89 +883,11 @@ int main(int argc, char *argv[])
 		//}
 
 		// if needed, read a new block of data from the board 
-		if ((pnt == wcnt) || ((buffer[pnt] & DATATYPE_MASK) == DATATYPE_FILLER)) {
-			CAENVME_FIFOMBLTReadCycle(handle, BaseAddress, (char *)buffer, MAX_BLT_SIZE, cvA32_U_MBLT, &bcnt);
-			if (ENABLE_LOG && (bcnt>0)) {
-				int b;
-				fprintf(logfile, "Read Data Block: size = %d bytes\n", bcnt);
-				for(b=0; b<(bcnt/4); b++)
-					fprintf(logfile, "%2d: %08X\n", b, buffer[b]);
-			}
-			wcnt = bcnt/4;
-			totnb += bcnt;
-			pnt = 0;
-		}
-		if (wcnt == 0)  // no data available
-			continue;
-
-		// save raw data (board memory dump)
-		if (of_raw != NULL)
-			fwrite(buffer, sizeof(char), bcnt, of_raw);
-
-		/* header */
-		switch (DataType) {
-		case DATATYPE_HEADER :
-			if((buffer[pnt] & DATATYPE_MASK) != DATATYPE_HEADER) {
-				//printf("Header not found: %08X (pnt=%d)\n", buffer[pnt], pnt);
-				DataError = 1;
-			} else {
-				nch = (buffer[pnt] >> 8) & 0x3F;
-				chindex = 0;
-				nev++;
-				memset(ADCdata, 0xFFFF, 32*sizeof(uint16_t));
-				if (nch>0)
-					DataType = DATATYPE_CHDATA;
-				else
-					DataType = DATATYPE_EOB;
-			}
-			break;
-
-		/* Channel data */
-		case DATATYPE_CHDATA :
-			if((buffer[pnt] & DATATYPE_MASK) != DATATYPE_CHDATA) {
-				//printf("Wrong Channel Data: %08X (pnt=%d)\n", buffer[pnt], pnt);
-				DataError = 1;
-			} else {
-				if (brd_nch == 32)
-					j = (int)((buffer[pnt] >> 16) & 0x3F);  // for V792 (32 channels)
-				else
-					j = (int)((buffer[pnt] >> 17) & 0x3F);  // for V792N (16 channels)
-				histo[j][buffer[pnt] & 0xFFF]++;
-				ADCdata[j] = buffer[pnt] & 0xFFF;
-				ns[j]++;
-				if (chindex == (nch-1))
-					DataType = DATATYPE_EOB;
-				chindex++;
-			}
-			break;
-
-		/* EOB */
-		case DATATYPE_EOB :
-			if((buffer[pnt] & DATATYPE_MASK) != DATATYPE_EOB) {
-				//printf("EOB not found: %08X (pnt=%d)\n", buffer[pnt], pnt);
-				DataError = 1;
-			} else {
-				DataType = DATATYPE_HEADER;
-				if (of_list != NULL) {
-					fprintf(of_list, "Event Num. %d\n", buffer[pnt] & 0xFFFFFF);
-					for(i=0; i<32; i++) {
-						if (ADCdata[i] != 0xFFFF)
-							fprintf(of_list, "Ch %2d: %d\n", i, ADCdata[i]);
-					}
-				}
-			}
-			break;
-		}
-		pnt++;
-
-		if (DataError) {
-			pnt = wcnt;
-			write_reg(0x1032, 0x4);
-			write_reg(0x1034, 0x4);
-			DataType = DATATYPE_HEADER;
-			DataError=0;
-		}
-
+		VMEReadBLT(BaseAddress,(char*) buffer);
+		
+		// if needed, read single cycle 
+		VMEReadCycle(BaseAddress);
+		
 	}
 
 
