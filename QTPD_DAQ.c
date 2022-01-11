@@ -405,7 +405,7 @@ void VMEReadCycle(uint16_t addr)
 		if (!(Id==2 || Id==0)) break; //Break out of inner loop in case the word is neither a header nor valid data
 		Old_data = Data;
 		Old_Ret = Ret;
-		addr += cvD16;
+		addr += cvD32;
 	}
 CAENVME_End(handle);
 }
