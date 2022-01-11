@@ -145,7 +145,7 @@ void VMEReadBLT(uint16_t addr,(char*) buffer)
 	uint32_t histo[32][4096];		// histograms (charge, peak or TAC)
 	uint32_t buffer[MAX_BLT_SIZE/4];	// readout buffer (raw data from the board)
 	uint16_t ADCdata[32];			// ADC data (charge, peak or TAC)
-	
+	buffer[0] = DATATYPE_FILLER;
 
 
 	// if needed, read a new block of data from the board 
@@ -879,7 +879,7 @@ int main(int argc, char *argv[])
 	printf("QTP board programmed\n");
 	printf("Press any key to start\n");
 	getch();
-	printf("Acquisition Started. Plot is currently set on channel %d\n", ch);
+	printf("Acquisition Started...");
 
 
 	// ------------------------------------------------------------------------------------
@@ -919,6 +919,9 @@ int main(int argc, char *argv[])
 			if(c == 's') {
 				SaveHistograms(histo, brd_nch);
 				printf("Saved histograms to output files\n");
+				printf("Press any key to save histograms\n");
+				getch();
+				quit = 1;
 			}
 			PrevKbTime = CurrentTime;
 		}
