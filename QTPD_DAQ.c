@@ -310,7 +310,7 @@ void VMEReadCycle(uint16_t addr)
        	for (i=0;i<1000;++i)
         {
              //CheckDataReady
-             CAENVME_ReadCycle(handle,BaseAddr+0x110E,&Data,cvA32_U_DATA,cvD32);
+             CAENVME_ReadCycle(handle,BaseAddr+0x110E,&Data,cvA32_U_DATA,cvD16);
              if (Data&1) {DataReady=true; break;}
 	     //Come out of the loop when there is at least one event in the Output Buffer.
         }
