@@ -305,7 +305,7 @@ void VMEReadCycle(uint16_t addr)
 	ushort ncyc =0;
 
 	//Read operation starts
-
+	/*
    	DataReady=false;
        	for (i=0;i<1000;++i)
         {
@@ -318,14 +318,15 @@ void VMEReadCycle(uint16_t addr)
 		printf("No event in the Output Buffer\n");
 		break;
 	}
-	for (i=0;i<32;++i)
+	*/
+	for (i=0;i<34;++i)
 	{
 		Ret=CAENVME_ReadCycle(handle,addr,&Data,cvA32_U_DATA,cvD32);
 		//printf("Address=%X Data=%u Am=%d DWidth=%d Ret=%d \n", addr, Data&0x1FFF, cvA32_U_DATA, cvD32, Ret);
 		FILE*of_list;
-					char tmp[255];
-					sprintf(tmp, "./List.txt");
-					of_list = fopen(tmp,"w+");
+		char tmp[255];
+		sprintf(tmp, "./List.txt");
+		of_list = fopen(tmp,"w+");
 		switch (Ret)
 		{
 			case cvSuccess:
