@@ -451,16 +451,52 @@ int SaveHistograms(uint32_t histo[32][4096], int numch)
 {
 	int i, j;
 	for(j=0; j<numch; j++) {
+       		int ithADCInput=-1;
+                switch (j)
+                {
+                case 0:
+                    ithADCInput = 0;
+                    break;
+                case 2:
+                    ithADCInput = 1;
+                    break;
+                case 4:
+                    ithADCInput = 2;
+                    break;
+                case 6:
+                    ithADCInput = 3;
+                    break;
+                case 8:
+                    ithADCInput = 4;
+                    break;
+                case 10:
+                    ithADCInput = 5;
+                    break;
+                case 12:
+                    ithADCInput = 6;
+                    break;
+                case 14:
+                    ithADCInput = 7;
+                    break;
+                default:
+                    break;
+                }
 		FILE *fout;
 		char fname[100];
-		sprintf(fname, "%s\\Histo_%d.txt",path,  j);
+		sprintf(fname, "./Histo_det_%d.txt", ithADCInput);
 		fout = fopen(fname, "w"); 
 		for(i=0; i<4096; i++) 
-			fprintf(fout, "%d\n", (int)histo[j][i]);
+			{
+				if((j-2*ithADCInput)==0)
+
+					fprintf(fout, "%d \t %d\n", i, (int)histo[j][i] );
+			}
+
 		fclose(fout);
 	}
 	return 0;
 }
+
 
 static void findModelVersion(uint16_t model, uint16_t vers, char *modelVersion, int *ch) {
 	switch (model) {
